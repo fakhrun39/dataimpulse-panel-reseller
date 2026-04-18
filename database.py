@@ -46,7 +46,7 @@ class Database:
                     ('password',      ''),
                     ('token',         ''),
                     ('token_expires', ''),
-                    ('base_url',      'https://proxy.bbproject.myd.id');
+                    ('base_url',      'https://proxy.bbproject.my.id');
             """)
         log.info("Database initialised at %s", DB_PATH)
 

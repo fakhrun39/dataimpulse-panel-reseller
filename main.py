@@ -36,7 +36,7 @@ db = Database()
 def get_client() -> DataImpulseClient:
     cfg = db.get_config()
     return DataImpulseClient(
-        base_url=cfg.get("base_url", "https://proxy.bbproject.myd.id"),
+        base_url=cfg.get("base_url", "https://proxy.bbproject.my.id"),
         token=cfg.get("token"),
         db=db,
     )
@@ -49,7 +49,7 @@ def flash_ctx(request: Request, extra: dict = None) -> dict:
         "request": request,
         "token_set": bool(cfg.get("token")),
         "login_set": bool(cfg.get("login")),
-        "base_url": cfg.get("base_url", "https://proxy.bbproject.myd.id"),
+        "base_url": cfg.get("base_url", "https://proxy.bbproject.my.id"),
         "now": datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
     }
     if extra:
@@ -100,7 +100,7 @@ async def settings_page(request: Request):
 async def settings_save(
     login: str = Form(...),
     password: str = Form(...),
-    base_url: str = Form("https://proxy.bbproject.myd.id"),
+    base_url: str = Form("https://proxy.bbproject.my.id"),
 ):
     db.set_config("login", login)
     db.set_config("password", password)

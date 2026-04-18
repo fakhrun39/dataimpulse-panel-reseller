@@ -32,7 +32,7 @@ open http://localhost:8000
 1. Go to **Settings** (`/settings`)
 2. Enter your DataImpulse API **Login** and **Password**
    (found in your DataImpulse dashboard → API Management)
-3. Confirm the **Base URL** is `https://proxy.bbproject.myd.id`
+3. Confirm the **Base URL** is `https://proxy.bbproject.my.id`
 4. Click **Save Credentials**
 5. Click **Authenticate & Refresh Token** — the JWT will be stored locally
 6. Navigate to **Dashboard** to verify balance is loading

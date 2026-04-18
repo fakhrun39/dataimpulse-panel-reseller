@@ -27,7 +27,7 @@ class APIError(Exception):
 
 class DataImpulseClient:
     def __init__(self, base_url: str, db, token: str = None):
-        self.base_url = (base_url or "https://proxy.bbproject.myd.id").rstrip("/")
+        self.base_url = (base_url or "https://proxy.bbproject.my.id").rstrip("/")
         self.db = db
         self._token = token or ""
 
