@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — DI Panel{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-error">⚠ {{ error }} — <a href="/settings" style="color:inherit;text-decoration:underline">Check Settings →</a></div>
+{% endif %}
+
+<!-- Stats row -->
+<div class="stats-row">
+  <div class="stat-box cyan">
+    <div class="stat-label">Account Balance</div>
+    <div class="stat-value">{{ balance.balance if balance else "—" }}</div>
+    <div class="stat-unit">GB remaining</div>
+  </div>
+  <div class="stat-box blue">
+    <div class="stat-label">Sub-Users</div>
+    <div class="stat-value">{{ sub_count if sub_count is not none else "—" }}</div>
+    <div class="stat-unit">total accounts</div>
+  </div>
+  <div class="stat-box green">
+    <div class="stat-label">API Endpoint</div>
+    <div class="stat-value" style="font-size:13px; margin-top:10px;" class="mono">{{ base_url | replace("https://","") }}</div>
+    <div class="stat-unit">proxy base url</div>
+  </div>
+  <div class="stat-box amber">
+    <div class="stat-label">Token Status</div>
+    <div class="stat-value" style="font-size:16px; margin-top:10px;">
+      {% if token_set %}<span class="text-success">● Active</span>{% else %}<span class="text-danger">● Missing</span>{% endif %}
+    </div>
+    <div class="stat-unit">JWT bearer</div>
+  </div>
+</div>
+
+<!-- Quick Actions -->
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+  <div class="card">
+    <div class="card-title">Quick Actions</div>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <a href="/sub-users" class="btn btn-ghost" style="justify-content:flex-start;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        Manage Sub-Users
+      </a>
+      <button class="btn btn-ghost" onclick="refreshBalance()" style="justify-content:flex-start; width:100%; text-align:left;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        Refresh Balance
+      </button>
+      <a href="/locations" class="btn btn-ghost" style="justify-content:flex-start;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+        Browse Locations
+      </a>
+      <a href="/settings" class="btn btn-ghost" style="justify-content:flex-start;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+        API Settings
+      </a>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Recent API Activity</div>
+    {% if recent_logs %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Time</th><th>Endpoint</th><th>Status</th><th>ms</th></tr></thead>
+        <tbody>
+        {% for log in recent_logs %}
+        <tr>
+          <td class="mono text-muted" style="font-size:11px;">{{ log.ts[11:19] }}</td>
+          <td class="mono" style="font-size:11px; color:var(--accent2);">{{ log.endpoint }}</td>
+          <td>
+            {% if log.status %}
+              {% if log.status < 300 %}<span class="badge badge-green">{{ log.status }}</span>
+              {% elif log.status < 500 %}<span class="badge badge-amber">{{ log.status }}</span>
+              {% else %}<span class="badge badge-red">{{ log.status }}</span>{% endif %}
+            {% else %}<span class="badge badge-gray">—</span>{% endif %}
+          </td>
+          <td class="mono text-muted" style="font-size:11px;">{{ log.duration_ms or "—" }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted" style="font-size:13px;">No API calls logged yet.</p>
+    {% endif %}
+    <div style="margin-top:12px;"><a href="/logs" class="btn btn-ghost btn-sm">View All Logs →</a></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function refreshBalance() {
+  try {
+    const r = await fetch('/api/logs?limit=1'); // trigger a no-op to show activity
+    location.reload();
+  } catch(e) { toast('Failed to refresh', false); }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Settings — DI Panel{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+{% if request.query_params.get('saved') %}
+<div class="alert alert-success">✓ Settings saved. Click "Authenticate" to obtain a fresh token.</div>
+{% endif %}
+
+<div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; max-width:900px;">
+
+  <!-- Credentials form -->
+  <div class="card">
+    <div class="card-title">API Credentials</div>
+    <form method="POST" action="/settings/save">
+      <div class="form-group">
+        <label class="form-label">API Login</label>
+        <input class="form-input" type="text" name="login" value="{{ cfg.get('login','') }}" placeholder="your_api_login" autocomplete="off" />
+        <div class="form-hint">From DataImpulse → API Management section</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">API Password</label>
+        <input class="form-input" type="password" name="password" value="{{ cfg.get('password','') }}" placeholder="••••••••" autocomplete="new-password" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Base URL (Proxy Endpoint)</label>
+        <input class="form-input" type="text" name="base_url" value="{{ cfg.get('base_url','https://proxy.bbproject.myd.id') }}" />
+        <div class="form-hint">Override to route through your own proxy gateway</div>
+      </div>
+      <button type="submit" class="btn btn-primary">Save Credentials</button>
+    </form>
+  </div>
+
+  <!-- Token management -->
+  <div class="card">
+    <div class="card-title">Token Management</div>
+    <p style="color:var(--muted); font-size:13px; margin-bottom:18px;">
+      Tokens are JWT-based and valid for <strong style="color:var(--text);">24 hours</strong>.
+      The panel caches the token in the local SQLite database and reuses it automatically.
+    </p>
+
+    <div style="background:var(--bg); border:1px solid var(--border); border-radius:4px; padding:14px; margin-bottom:18px;">
+      <div class="form-label" style="margin-bottom:8px;">Current Token Preview</div>
+      {% if cfg.get('token') %}
+        <div class="mono" style="font-size:11px; color:var(--accent2); word-break:break-all;">
+          {{ cfg['token'][:40] }}…
+        </div>
+        {% if cfg.get('token_expires') %}
+        <div class="text-muted mono" style="font-size:10px; margin-top:6px;">
+          Expires: epoch {{ cfg['token_expires'] }}
+        </div>
+        {% endif %}
+      {% else %}
+        <div class="text-muted mono" style="font-size:12px;">No token stored</div>
+      {% endif %}
+    </div>
+
+    <button class="btn btn-success" onclick="doAuth(this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      Authenticate & Refresh Token
+    </button>
+    <div id="auth-result" style="margin-top:12px; font-size:12px; font-family:var(--mono);"></div>
+
+    <hr style="border:none; border-top:1px solid var(--border); margin:20px 0;" />
+    <div class="card-title">Connection Test</div>
+    <button class="btn btn-ghost" onclick="testConn(this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Test Balance Endpoint
+    </button>
+    <div id="test-result" style="margin-top:12px;"></div>
+  </div>
+
+</div>
+
+<!-- DB Schema info -->
+<div class="card" style="max-width:900px; margin-top:0;">
+  <div class="card-title">Local Database Schema (panel.db)</div>
+  <div class="code-block">-- Config table (key-value store for all settings)
+CREATE TABLE config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL DEFAULT ''
+);
+-- Keys: login, password, token, token_expires, base_url
+
+-- Audit log for every API request made
+CREATE TABLE audit_log (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    ts          TEXT    NOT NULL,          -- ISO timestamp (UTC)
+    level       TEXT    NOT NULL,          -- INFO / WARN / ERROR
+    endpoint    TEXT    NOT NULL,          -- e.g. /sub-user/list
+    method      TEXT    NOT NULL,          -- GET / POST
+    status      INTEGER,                   -- HTTP status code
+    duration_ms INTEGER,                   -- round-trip time
+    detail      TEXT                       -- error message if any
+);</div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function doAuth(btn) {
+  const el = document.getElementById('auth-result');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Authenticating…';
+  try {
+    const d = await apiCall('/settings/auth', {});
+    el.style.color = 'var(--success)';
+    el.textContent = '✓ Token obtained: ' + d.token_preview;
+    toast('Token refreshed successfully');
+    setTimeout(() => location.reload(), 1200);
+  } catch(e) {
+    el.style.color = 'var(--danger)';
+    el.textContent = '✗ ' + e.message;
+    toast(e.message, false);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg> Authenticate & Refresh Token';
+  }
+}
+
+async function testConn(btn) {
+  const el = document.getElementById('test-result');
+  btn.disabled = true;
+  try {
+    const r = await fetch('/');
+    const d = await fetch('/api/logs?limit=1');
+    el.innerHTML = '<span style="color:var(--success);font-family:var(--mono);font-size:12px;">✓ Panel is responding correctly</span>';
+    toast('Connection OK');
+  } catch(e) {
+    el.innerHTML = '<span style="color:var(--danger);font-family:var(--mono);font-size:12px;">✗ ' + e.message + '</span>';
+  } finally {
+    btn.disabled = false;
+  }
+}
+</script>
+{% endblock %}

@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}Sub-User #{{ subuser_id }} — DI Panel{% endblock %}
+{% block page_title %}Sub-User Detail{% endblock %}
+
+{% block content %}
+<div class="flex items-c gap-3 mb-4">
+  <a href="/sub-users" class="btn btn-ghost btn-sm">← Back</a>
+  {% if user %}
+  <span class="mono text-accent" style="font-size:15px; font-weight:600;">{{ user.get('login','#' + subuser_id|string) }}</span>
+  <span class="badge badge-gray mono">ID: {{ subuser_id }}</span>
+  {% if user.get('blocked') or user.get('is_blocked') %}
+    <span class="badge badge-red">Blocked</span>
+  {% else %}
+    <span class="badge badge-green">Active</span>
+  {% endif %}
+  {% endif %}
+</div>
+
+{% if error %}
+<div class="alert alert-error">⚠ {{ error }}</div>
+{% endif %}
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+
+  <!-- Info + Actions -->
+  <div>
+    <div class="card">
+      <div class="card-title">Account Info</div>
+      {% if user %}
+      <table style="width:100%;">
+        {% for k, v in user.items() %}
+        <tr>
+          <td class="mono text-muted" style="padding:6px 0; font-size:11px; width:40%;">{{ k }}</td>
+          <td class="mono" style="padding:6px 0; font-size:12px; word-break:break-all;">{{ v }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="text-muted">Could not load user info.</p>{% endif %}
+    </div>
+
+    <div class="card">
+      <div class="card-title">Actions</div>
+      <div style="display:flex; flex-direction:column; gap:10px;">
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm" onclick="openResetPwd()">Reset Password</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleBlock()">
+            {{ "Unblock" if (user and (user.get('blocked') or user.get('is_blocked'))) else "Block" }}
+          </button>
+        </div>
+        <hr style="border:none;border-top:1px solid var(--border);" />
+        <div class="flex gap-2">
+          <input id="ip-input" class="form-input" type="text" placeholder="9.9.9.9" style="width:auto;flex:1;" />
+          <button class="btn btn-success btn-sm" onclick="addIp()">Add IP</button>
+          <button class="btn btn-danger btn-sm" onclick="removeIp()">Remove IP</button>
+        </div>
+        <div class="form-hint">Manage allowed IP addresses for this sub-user</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Balance & Usage -->
+  <div>
+    <div class="card">
+      <div class="card-title">Balance</div>
+      {% if balance %}
+      <div class="stat-value mono" style="font-size:32px; color:var(--accent2);">
+        {{ balance.get('balance', '—') }} <span style="font-size:14px; color:var(--muted);">GB</span>
+      </div>
+      {% else %}<p class="text-muted">Balance unavailable.</p>{% endif %}
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <input id="gb-input" class="form-input" type="number" step="0.1" min="0.1" placeholder="GB to add" style="width:140px;" />
+        <button class="btn btn-success btn-sm" onclick="addBalance()">Add GB</button>
+        <button class="btn btn-danger btn-sm" onclick="dropBalance()">Drop All</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Usage Stats (Month)</div>
+      {% if usage %}
+      <table style="width:100%;">
+        {% for k, v in usage.items() %}
+        <tr>
+          <td class="mono text-muted" style="padding:5px 0;font-size:11px;width:50%;">{{ k }}</td>
+          <td class="mono" style="padding:5px 0;font-size:12px;">{{ v }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}<p class="text-muted">Usage stats unavailable.</p>{% endif %}
+      <div style="margin-top:12px;">
+        <button class="btn btn-ghost btn-sm" onclick="loadErrors()">Load Error Stats</button>
+      </div>
+      <div id="error-stats" style="margin-top:10px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Protocols</div>
+      {% if protocols %}
+      <div id="proto-list" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+        {% for p in protocols.get('protocols', []) %}
+        <span class="badge badge-blue">{{ p }}</span>
+        {% endfor %}
+      </div>
+      {% else %}<p class="text-muted">Protocols unavailable.</p>{% endif %}
+      <div class="flex gap-2">
+        <select id="proto-select" class="form-select" style="width:auto;">
+          <option value="http">HTTP</option>
+          <option value="socks5">SOCKS5</option>
+          <option value="socks4">SOCKS4</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="setProtocol()">Set Protocol</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modals -->
+<div class="modal-backdrop" id="reset-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('reset-modal')">✕</button>
+    <div class="modal-title">Reset Password</div>
+    <div class="form-group">
+      <label class="form-label">New Password</label>
+      <input class="form-input" id="new-pwd" type="password" placeholder="new_password" />
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button class="btn btn-primary" onclick="doResetPwd()">Reset</button>
+      <button class="btn btn-ghost" onclick="closeModal('reset-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const UID = {{ subuser_id }};
+const IS_BLOCKED = {{ 'true' if user and (user.get('blocked') or user.get('is_blocked')) else 'false' }};
+
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openResetPwd()  { document.getElementById('reset-modal').classList.add('open'); }
+
+async function doResetPwd() {
+  const pwd = document.getElementById('new-pwd').value;
+  if (!pwd) return;
+  try {
+    await apiCall('/api/sub-users/reset-password', {subuser_id:UID, password:pwd});
+    toast('Password reset successfully');
+    closeModal('reset-modal');
+  } catch(e) { toast(e.message, false); }
+}
+
+async function toggleBlock() {
+  try {
+    await apiCall('/api/sub-users/set-blocked', {subuser_id:UID, blocked:!IS_BLOCKED});
+    toast(IS_BLOCKED ? 'User unblocked' : 'User blocked');
+    location.reload();
+  } catch(e) { toast(e.message, false); }
+}
+
+async function addBalance() {
+  const gb = parseFloat(document.getElementById('gb-input').value);
+  if (!gb) return;
+  try {
+    await apiCall('/api/sub-users/balance/add', {subuser_id:UID, amount:gb});
+    toast(`+${gb} GB added`);
+    location.reload();
+  } catch(e) { toast(e.message, false); }
+}
+
+async function dropBalance() {
+  if (!confirm('Drop all balance for this sub-user? Remainder rounds down.')) return;
+  try {
+    await apiCall('/api/sub-users/balance/drop', {subuser_id:UID});
+    toast('Balance dropped');
+    location.reload();
+  } catch(e) { toast(e.message, false); }
+}
+
+async function addIp() {
+  const ip = document.getElementById('ip-input').value.trim();
+  if (!ip) return;
+  try {
+    await apiCall('/api/sub-users/allowed-ips/add', {subuser_id:UID, ip});
+    toast('IP added: ' + ip);
+  } catch(e) { toast(e.message, false); }
+}
+
+async function removeIp() {
+  const ip = document.getElementById('ip-input').value.trim();
+  if (!ip) return;
+  try {
+    await apiCall('/api/sub-users/allowed-ips/remove', {subuser_id:UID, ip});
+    toast('IP removed: ' + ip);
+  } catch(e) { toast(e.message, false); }
+}
+
+async function setProtocol() {
+  const proto = document.getElementById('proto-select').value;
+  try {
+    await apiCall('/api/sub-users/protocols/set', {subuser_id:UID, protocols:[proto]});
+    toast('Protocol set: ' + proto);
+  } catch(e) { toast(e.message, false); }
+}
+
+async function loadErrors() {
+  const el = document.getElementById('error-stats');
+  el.innerHTML = '<span class="spinner"></span>';
+  try {
+    const d = await apiCall(`/api/sub-users/${UID}/usage/errors?period=month`, null, 'GET');
+    el.innerHTML = '<pre class="code-block" style="font-size:11px;">' + JSON.stringify(d, null, 2) + '</pre>';
+  } catch(e) {
+    el.innerHTML = '<span style="color:var(--danger);font-size:12px;">✗ ' + e.message + '</span>';
+  }
+}
+</script>
+{% endblock %}

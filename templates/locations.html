@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Locations — DI Panel{% endblock %}
+{% block page_title %}Proxy Locations{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-error">⚠ {{ error }}</div>
+{% endif %}
+
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+  <div class="stat-box cyan">
+    <div class="stat-label">Residential Pool</div>
+    <div class="stat-value">{{ residential | length if residential else "—" }}</div>
+    <div class="stat-unit">countries available</div>
+  </div>
+  <div class="stat-box blue">
+    <div class="stat-label">Datacenter Pool</div>
+    <div class="stat-value">{{ datacenter | length if datacenter else "—" }}</div>
+    <div class="stat-unit">countries available</div>
+  </div>
+</div>
+
+<!-- Location lookup -->
+<div class="card">
+  <div class="card-title">Location Lookup Tool</div>
+  <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label class="form-label">Pool Type</label>
+      <select id="pool-type" class="form-select" style="width:160px;">
+        <option value="residential">Residential</option>
+        <option value="datacenter">Datacenter</option>
+      </select>
+    </div>
+    <div>
+      <label class="form-label">Country Code</label>
+      <input id="cc-input" class="form-input" type="text" placeholder="us" style="width:100px;" maxlength="2" />
+    </div>
+    <button class="btn btn-primary" onclick="lookupStates()">Get States</button>
+    <button class="btn btn-ghost" onclick="lookupCities()">Get Cities</button>
+    <button class="btn btn-ghost" onclick="loadPoolStats()">Pool Stats</button>
+  </div>
+  <div id="lookup-result" style="margin-top:16px;"></div>
+</div>
+
+<!-- Residential table -->
+{% if residential %}
+<div class="card">
+  <div class="card-title">Residential — Country List</div>
+  <div class="table-wrap" style="max-height:400px; overflow-y:auto;">
+    <table>
+      <thead><tr><th>Code</th><th>Country</th><th>IPs Available</th></tr></thead>
+      <tbody>
+        {% if residential is mapping %}
+          {% for item in residential.values() %}
+          <tr>
+            <td class="mono" style="color:var(--accent2); text-transform:uppercase;">{{ item.get('country_code','—') }}</td>
+            <td>{{ item.get('country_name','—') }}</td>
+            <td class="mono">{{ item.get('count','—') }}</td>
+          </tr>
+          {% endfor %}
+        {% elif residential is iterable %}
+          {% for item in residential %}
+          <tr>
+            <td class="mono" style="color:var(--accent2); text-transform:uppercase;">{{ item.get('country_code','—') }}</td>
+            <td>{{ item.get('country_name','—') }}</td>
+            <td class="mono">{{ item.get('count','—') }}</td>
+          </tr>
+          {% endfor %}
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function lookupStates() {
+  const pool = document.getElementById('pool-type').value;
+  const cc   = document.getElementById('cc-input').value.trim();
+  if (!cc) { toast('Enter a country code', false); return; }
+  const el = document.getElementById('lookup-result');
+  el.innerHTML = '<span class="spinner"></span>';
+  try {
+    const d = await apiCall('/api/locations/states', {country_code: cc, pool_type: pool});
+    renderTable(el, d, ['state_code','state_name','count']);
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">'+e.message+'</div>'; }
+}
+
+async function lookupCities() {
+  const pool = document.getElementById('pool-type').value;
+  const cc   = document.getElementById('cc-input').value.trim();
+  if (!cc) { toast('Enter a country code', false); return; }
+  const el = document.getElementById('lookup-result');
+  el.innerHTML = '<span class="spinner"></span>';
+  try {
+    const d = await apiCall('/api/locations/cities', {country_code: cc, pool_type: pool});
+    renderTable(el, d, ['city_name','state_code','count']);
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">'+e.message+'</div>'; }
+}
+
+async function loadPoolStats() {
+  const pool = document.getElementById('pool-type').value;
+  const el = document.getElementById('lookup-result');
+  el.innerHTML = '<span class="spinner"></span>';
+  try {
+    const d = await fetch('/api/pool-stats?pool_type='+pool).then(r=>r.json());
+    el.innerHTML = '<pre class="code-block" style="font-size:11px;">' + JSON.stringify(d, null, 2) + '</pre>';
+  } catch(e) { el.innerHTML = '<div class="alert alert-error">'+e.message+'</div>'; }
+}
+
+function renderTable(el, data, cols) {
+  const rows = Array.isArray(data) ? data : (data.data || Object.values(data));
+  if (!rows.length) { el.textContent = 'No results.'; return; }
+  let h = `<div class="table-wrap" style="max-height:300px;overflow-y:auto;"><table>
+    <thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>`;
+  rows.forEach(r => {
+    h += '<tr>' + cols.map(c => `<td class="mono" style="font-size:12px;">${r[c]??'—'}</td>`).join('') + '</tr>';
+  });
+  h += '</tbody></table></div>';
+  el.innerHTML = h;
+}
+</script>
+{% endblock %}

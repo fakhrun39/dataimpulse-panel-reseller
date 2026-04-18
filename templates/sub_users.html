@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% block title %}Sub-Users — DI Panel{% endblock %}
+{% block page_title %}Sub-User Management{% endblock %}
+
+{% block content %}
+{% if error %}
+<div class="alert alert-error">⚠ {{ error }}</div>
+{% endif %}
+
+<div class="flex items-c gap-3 mb-4">
+  <button class="btn btn-primary" onclick="openCreate()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Create Sub-User
+  </button>
+  <span class="text-muted mono" style="font-size:11px;">
+    {{ data.get('total', 0) if data else 0 }} total
+  </span>
+  <div class="ml-auto flex gap-2">
+    {% if offset > 0 %}
+    <a href="/sub-users?limit={{ limit }}&offset={{ [offset - limit, 0]|max }}" class="btn btn-ghost btn-sm">← Prev</a>
+    {% endif %}
+    {% if data and data.get('data') and data['data']|length == limit %}
+    <a href="/sub-users?limit={{ limit }}&offset={{ offset + limit }}" class="btn btn-ghost btn-sm">Next →</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th><th>Login</th><th>Status</th><th>Balance (GB)</th><th>Protocols</th><th>Created</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="sub-user-table">
+        {% if data and data.get('data') %}
+          {% for u in data['data'] %}
+          <tr id="row-{{ u.id }}">
+            <td class="mono" style="color:var(--muted);">{{ u.id }}</td>
+            <td class="mono" style="color:var(--accent2);">{{ u.login }}</td>
+            <td>
+              {% if u.get('blocked') or u.get('is_blocked') %}
+                <span class="badge badge-red">Blocked</span>
+              {% else %}
+                <span class="badge badge-green">Active</span>
+              {% endif %}
+            </td>
+            <td class="mono">{{ u.get('balance', '—') }}</td>
+            <td>
+              {% set protos = u.get('supported_protocols', []) %}
+              {% if protos %}
+                {% for p in protos %}<span class="badge badge-blue" style="margin-right:3px;">{{ p }}</span>{% endfor %}
+              {% else %}<span class="text-muted">—</span>{% endif %}
+            </td>
+            <td class="mono text-muted" style="font-size:11px;">{{ u.get('created_at', '—')[:10] if u.get('created_at') else '—' }}</td>
+            <td>
+              <div class="flex gap-2">
+                <a href="/sub-users/{{ u.id }}" class="btn btn-ghost btn-sm">Detail</a>
+                <button class="btn btn-ghost btn-sm" onclick="toggleBlock({{ u.id }}, {{ 'false' if (u.get('blocked') or u.get('is_blocked')) else 'true' }})">
+                  {{ "Unblock" if (u.get('blocked') or u.get('is_blocked')) else "Block" }}
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="deleteUser({{ u.id }}, '{{ u.login }}')">Delete</button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        {% else %}
+          <tr><td colspan="7" style="text-align:center; color:var(--muted); padding:32px;">No sub-users found.</td></tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create Modal -->
+<div class="modal-backdrop" id="create-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('create-modal')">✕</button>
+    <div class="modal-title">Create Sub-User</div>
+    <div class="form-group">
+      <label class="form-label">Login</label>
+      <input class="form-input" id="new-login" type="text" placeholder="subuser_login" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input class="form-input" id="new-pass" type="password" placeholder="strong_password" />
+    </div>
+    <div class="form-group">
+      <label class="form-label">Initial Balance (GB)</label>
+      <input class="form-input" id="new-balance" type="number" step="0.1" min="0" placeholder="0" />
+    </div>
+    <div style="display:flex; gap:10px; margin-top:4px;">
+      <button class="btn btn-primary" onclick="doCreate()">Create</button>
+      <button class="btn btn-ghost" onclick="closeModal('create-modal')">Cancel</button>
+    </div>
+    <div id="create-error" style="margin-top:10px; color:var(--danger); font-size:12px; font-family:var(--mono);"></div>
+  </div>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="modal-backdrop" id="reset-modal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('reset-modal')">✕</button>
+    <div class="modal-title">Reset Password</div>
+    <input type="hidden" id="reset-uid" />
+    <div class="form-group">
+      <label class="form-label">New Password</label>
+      <input class="form-input" id="reset-pass" type="password" placeholder="new_password" />
+    </div>
+    <div style="display:flex; gap:10px; margin-top:4px;">
+      <button class="btn btn-primary" onclick="doReset()">Reset</button>
+      <button class="btn btn-ghost" onclick="closeModal('reset-modal')">Cancel</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function openCreate()  { document.getElementById('create-modal').classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+async function doCreate() {
+  const login   = document.getElementById('new-login').value.trim();
+  const password= document.getElementById('new-pass').value;
+  const balance = parseFloat(document.getElementById('new-balance').value || 0);
+  const errEl   = document.getElementById('create-error');
+  if (!login || !password) { errEl.textContent = 'Login and password are required.'; return; }
+  try {
+    await apiCall('/api/sub-users/create', { login, password, balance });
+    toast('Sub-user created: ' + login);
+    closeModal('create-modal');
+    location.reload();
+  } catch(e) {
+    errEl.textContent = '✗ ' + e.message;
+    toast(e.message, false);
+  }
+}
+
+async function toggleBlock(uid, block) {
+  try {
+    await apiCall('/api/sub-users/set-blocked', { subuser_id: uid, blocked: block });
+    toast(block ? 'User blocked' : 'User unblocked');
+    location.reload();
+  } catch(e) { toast(e.message, false); }
+}
+
+async function deleteUser(uid, login) {
+  if (!confirm(`Delete sub-user "${login}" (ID: ${uid})? This cannot be undone.`)) return;
+  try {
+    await apiCall('/api/sub-users/delete', { subuser_id: uid });
+    toast('Sub-user deleted');
+    document.getElementById('row-' + uid)?.remove();
+  } catch(e) { toast(e.message, false); }
+}
+</script>
+{% endblock %}
